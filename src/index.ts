@@ -1,36 +1,8 @@
 import GoogleAssistant from "google-assistant";
-import path from "path";
 
-// Definitions that aren't exported from the google-assistant lib but are copied and pasted here for use
-type AudioConfig = {
-    encodingOut?: "LINEAR16" | "MP3" | "OPUS_IN_OGG";
-    sampleRateOut?: number;
-    encodingIn?: "LINEAR16" | "FLAC";
-    sampleRateIn?: number;
-};
-
-type AuthConfig = {
-    keyFilePath: string;
-    savedTokensPath: string;
-    tokenInput?(processTokens: any): void;
-};
-
-type ConversationConfig = {
-    audio?: AudioConfig;
-    textQuery?: string;
-    deviceId?: string;
-    deviceModelId?: string;
-    lang?: string;
-    isNew?: boolean;
-    deviceLocation?: DeviceLocation;
-    screen?: ScreenConfig;
-};
-
-type DeviceLocation = {
-    coordinates: { latitude: number; longitude: number };
-};
-
-type ScreenConfig = { isOn: boolean };
+// Would be nicer if these were exported from the google-assistant lib, but we can kinda hackily extract them here anyway for easier use
+type ConversationConfig = Exclude<Parameters<GoogleAssistant["start"]>[0], undefined>;
+type AuthConfig = ConstructorParameters<typeof GoogleAssistant>[0];
 
 type EventEmitter = {
     emit(type: string, payload?: any): any;
@@ -42,17 +14,28 @@ type Conversation = EventEmitter & {
     end(): void;
 };
 
-export class GoogleHome {
+class GoogleHome {
     private readonly auth: AuthConfig;
+    private readonly assistant: GoogleAssistant;
 
-    constructor(auth: AuthConfig) {
+    constructor(auth: AuthConfig, logOnReady?: boolean) {
         this.auth = auth;
-        this._assistant = new GoogleAssistant(this.auth);
+        const assistant = new GoogleAssistant(this.auth);
+        this.assistant = assistant;
+
+        this._onInit = new Promise((resolve, reject) => {
+            assistant.on("ready", () => {
+                if (logOnReady === true) {
+                    console.log("Assistant is ready!");
+                }
+                resolve();
+            });
+        });
     }
 
-    private readonly _assistant: GoogleAssistant;
-    get assistant(): GoogleAssistant {
-        return this._assistant;
+    private readonly _onInit: Promise<void>;
+    public get onInit(): Promise<void> {
+        return this._onInit;
     }
 
     private isError(obj: Conversation | Error): obj is Error {
@@ -126,7 +109,7 @@ export class GoogleHome {
                     if (error) {
                         return reject(error);
                     } else if (continueConversation) {
-                        this._assistant.start();
+                        this.assistant.start();
                     } else {
                         return resolve();
                     }
@@ -143,3 +126,5 @@ export class GoogleHome {
         await this.handleResponse(conversation);
     }
 }
+
+export { GoogleHome, AuthConfig };
