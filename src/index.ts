@@ -15,6 +15,8 @@ type Conversation = EventEmitter & {
 class GoogleHome {
     private readonly assistant: GoogleAssistant;
 
+    private timeout?: NodeJS.Timeout | undefined;
+
     constructor(config: HomeConfig) {
         const assistant = new GoogleAssistant({ keyFilePath: config.keyFilePath, savedTokensPath: config.savedTokensPath });
         this.assistant = assistant;
@@ -22,27 +24,16 @@ class GoogleHome {
         this._onInit = new Promise((resolve, reject) => {
             // If a timeout length is specified, set up a timeout that rejects the promise if the google assistant doesn't respond with a "ready" event in time
             let timedOut = false;
-            let timeout: NodeJS.Timeout | undefined = undefined;
+            // let timeout: NodeJS.Timeout | undefined = undefined;
             if (config.timeout != null) {
-                timeout = setTimeout(() => {
+                this.timeout = setTimeout(() => {
                     timedOut = true;
                     reject(new Error("Google assistant instance failed to initialise in time"));
                 }, config.timeout);
             }
 
             assistant.on("ready", () => {
-                // If the promise has already been marked as timed out, then we know we've already rejected and shouldn't do any more
-                if (timedOut) {
-                    return;
-                }
-
-                // If a timeout is underway, clear it so that it doesn't cause a rejection since we're handling the "ready" event now
-                if (timeout !== undefined) {
-                    clearTimeout(timeout);
-                }
-                if (config.logOnReady === true) {
-                    console.log("Assistant is ready!");
-                }
+                this.onAssistantReady(timedOut, config.logOnReady);
                 resolve();
             });
         });
@@ -51,6 +42,21 @@ class GoogleHome {
     private readonly _onInit: Promise<void>;
     public get onInit(): Promise<void> {
         return this._onInit;
+    }
+
+    private onAssistantReady(timedOut: boolean, logOnReady?: boolean): void {
+        // If the promise has already been marked as timed out, then we know we've already rejected and shouldn't do any more
+        if (timedOut) {
+            return;
+        }
+
+        // If a timeout is underway, clear it so that it doesn't cause a rejection since we're handling the "ready" event now
+        if (this.timeout !== undefined) {
+            clearTimeout(this.timeout);
+        }
+        if (logOnReady === true) {
+            console.log("Assistant is ready!");
+        }
     }
 
     private isError(obj: Conversation | Error): obj is Error {
@@ -92,27 +98,48 @@ class GoogleHome {
         /*eslint-disable @typescript-eslint/no-unused-vars */
         return new Promise<void>((resolve, reject) => {
             conversation
-                .on("audio-data", (data: any) => {
-                    // Do stuff with the audio data from the server
-                })
-                .on("end-of-utterance", () => {
-                    // Do stuff when done speaking to the assistant
-                })
-                .on("transcription", (data: any) => {
-                    // Do stuff with the words you are saying to the assistant
-                })
-                .on("response", (text: any) => {
-                    // Do stuff with the text that the assistant said back
-                })
-                .on("volume-percent", (percent: any) => {
-                    // Do stuff with a volume percent change (range from 1-100)
-                })
-                .on("device-action", (action: any) => {
-                    // If you've set this device up to handle actions, you'll get that here
-                })
-                .on("screen-data", (screen: any) => {
-                    // If the screen.isOn flag was set to true, you'll get the format and data of the output
-                })
+                // .on("audio-data", (data: any) => {
+                //     // Do stuff with the audio data from the server
+                // })
+                // .on("end-of-utterance", () => {
+                //     // Do stuff when done speaking to the assistant
+                // })
+                // .on("transcription", (data: any) => {
+                //     // Do stuff with the words you are saying to the assistant
+                // })
+                // .on("response", (text: any) => {
+                //     // Do stuff with the text that the assistant said back
+                // })
+                // .on("volume-percent", (percent: any) => {
+                //     // Do stuff with a volume percent change (range from 1-100)
+                // })
+                // .on("device-action", (action: any) => {
+                //     // If you've set this device up to handle actions, you'll get that here
+                // })
+                // .on("screen-data", (screen: any) => {
+                //     // If the screen.isOn flag was set to true, you'll get the format and data of the output
+                // })
+                // .on("audio-data", (data: any) => {
+                //     // Do stuff with the audio data from the server
+                // })
+                // .on("end-of-utterance", () => {
+                //     // Do stuff when done speaking to the assistant
+                // })
+                // .on("transcription", (data: any) => {
+                //     // Do stuff with the words you are saying to the assistant
+                // })
+                // .on("response", (text: any) => {
+                //     // Do stuff with the text that the assistant said back
+                // })
+                // .on("volume-percent", (percent: any) => {
+                //     // Do stuff with a volume percent change (range from 1-100)
+                // })
+                // .on("device-action", (action: any) => {
+                //     // If you've set this device up to handle actions, you'll get that here
+                // })
+                // .on("screen-data", (screen: any) => {
+                //     // If the screen.isOn flag was set to true, you'll get the format and data of the output
+                // })
                 .on("ended", (error: any, continueConversation: boolean) => {
                     // Once the conversation is ended, see if we need to follow up
                     if (error) {
