@@ -1,21 +1,10 @@
 import GoogleAssistant from "google-assistant";
+import { Conversation } from "./types/conversation";
 import { ConversationConfig } from "./types/conversationConfig";
 import { HomeConfig } from "./types/homeConfig";
 
-type EventEmitter = {
-    emit(type: string, payload?: any): any;
-    on(type: string, handler: (...args: any[]) => any): any;
-};
-
-type Conversation = EventEmitter & {
-    write(bytes: Uint8Array): void;
-    end(): void;
-};
-
 class GoogleHome {
     private readonly assistant: GoogleAssistant;
-
-    private timeout?: NodeJS.Timeout | undefined;
 
     constructor(config: HomeConfig) {
         const assistant = new GoogleAssistant({ keyFilePath: config.keyFilePath, savedTokensPath: config.savedTokensPath });
@@ -24,17 +13,26 @@ class GoogleHome {
         this._onInit = new Promise((resolve, reject) => {
             // If a timeout length is specified, set up a timeout that rejects the promise if the google assistant doesn't respond with a "ready" event in time
             let timedOut = false;
-            // let timeout: NodeJS.Timeout | undefined = undefined;
+            let timeout: NodeJS.Timeout | undefined;
             if (config.timeout != null) {
-                this.timeout = setTimeout(() => {
+                timeout = setTimeout(() => {
                     timedOut = true;
                     reject(new Error("Google assistant instance failed to initialise in time"));
                 }, config.timeout);
             }
 
             assistant.on("ready", () => {
-                this.onAssistantReady(timedOut, config.logOnReady);
-                resolve();
+                // If the promise has already been marked as timed out, then we know we've already rejected and shouldn't do any more
+                if (!timedOut) {
+                    // If a timeout is underway, clear it so that it doesn't cause a rejection since we're handling the "ready" event now
+                    if (timeout !== undefined) {
+                        clearTimeout(timeout);
+                    }
+                    if (config.logOnReady === true) {
+                        console.log("Assistant is ready!");
+                    }
+                    resolve();
+                }
             });
         });
     }
@@ -44,23 +42,8 @@ class GoogleHome {
         return this._onInit;
     }
 
-    private onAssistantReady(timedOut: boolean, logOnReady?: boolean): void {
-        // If the promise has already been marked as timed out, then we know we've already rejected and shouldn't do any more
-        if (timedOut) {
-            return;
-        }
-
-        // If a timeout is underway, clear it so that it doesn't cause a rejection since we're handling the "ready" event now
-        if (this.timeout !== undefined) {
-            clearTimeout(this.timeout);
-        }
-        if (logOnReady === true) {
-            console.log("Assistant is ready!");
-        }
-    }
-
     private isError(obj: Conversation | Error): obj is Error {
-        return (obj as Error)?.message ? true : false;
+        return (obj as Error).message !== undefined;
     }
 
     private createConversationConfig(text: string): ConversationConfig {
@@ -82,7 +65,7 @@ class GoogleHome {
      *
      * @param config The conversation configuration object
      */
-    private async startConversation(config: ConversationConfig): Promise<Conversation> {
+    private async startConversation(config?: ConversationConfig): Promise<Conversation> {
         return new Promise((resolve, reject) => {
             this.assistant.start(config, (obj) => {
                 if (this.isError(obj)) {
@@ -95,7 +78,6 @@ class GoogleHome {
     }
 
     private async handleResponse(conversation: Conversation): Promise<void> {
-        /*eslint-disable @typescript-eslint/no-unused-vars */
         return new Promise<void>((resolve, reject) => {
             conversation
                 // .on("audio-data", (data: any) => {
@@ -140,12 +122,13 @@ class GoogleHome {
                 // .on("screen-data", (screen: any) => {
                 //     // If the screen.isOn flag was set to true, you'll get the format and data of the output
                 // })
-                .on("ended", (error: any, continueConversation: boolean) => {
+                .on("ended", async (error: any, continueConversation: boolean) => {
                     // Once the conversation is ended, see if we need to follow up
                     if (error) {
                         return reject(error);
                     } else if (continueConversation) {
-                        this.assistant.start();
+                        const conversation = await this.startConversation(undefined);
+                        return this.handleResponse(conversation);
                     } else {
                         return resolve();
                     }
