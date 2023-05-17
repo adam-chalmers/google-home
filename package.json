@@ -1,6 +1,6 @@
 {
     "name": "@adam-chalmers/google-home",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "description": "A package to send commands to a google home on the local network.",
     "author": "Adam Chalmers <adam.chalmers93@gmail.com>",
     "license": "ISC",
